@@ -1,8 +1,9 @@
 import { Product } from "@/types/store";
 import { useCart } from "@/context/CartContext";
+import { useDealerAuth } from "@/context/DealerAuthContext";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Plus, Minus, Eye } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Eye, Lock } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -13,14 +14,35 @@ interface Props {
 
 export default function ProductCard({ product, index, onZoom }: Props) {
   const { addToCart } = useCart();
-  const [qty, setQty] = useState(1);
+  const { isDealer } = useDealerAuth();
+  const moq = product.minimumOrder || 1;
+  const [qty, setQty] = useState(moq);
   const outOfStock = product.stock !== undefined && product.stock <= 0;
+  const maxStock = product.stock;
 
   const handleAdd = () => {
     if (outOfStock) return;
+    if (qty < moq) {
+      toast.error(`Minimum order quantity is ${moq} pieces.`);
+      return;
+    }
+    if (maxStock !== undefined && qty > maxStock) {
+      toast.error(`Only ${maxStock} pieces available in stock.`);
+      return;
+    }
     addToCart(product, qty);
-    setQty(1);
+    setQty(moq);
     toast.success(`${product.name} added to cart!`);
+  };
+
+  const handleQtyChange = (newQty: number) => {
+    const min = Math.max(1, newQty);
+    if (maxStock !== undefined && min > maxStock) {
+      toast.error(`Only ${maxStock} in stock.`);
+      setQty(maxStock);
+      return;
+    }
+    setQty(min);
   };
 
   return (
@@ -59,24 +81,45 @@ export default function ProductCard({ product, index, onZoom }: Props) {
             {product.season}
           </span>
         )}
+        {maxStock !== undefined && maxStock > 0 && maxStock <= 10 && (
+          <span className="absolute bottom-3 left-3 bg-accent text-accent-foreground text-xs px-2.5 py-1 rounded-full font-medium">
+            Only {maxStock} left
+          </span>
+        )}
       </div>
 
       <div className="p-4 space-y-3">
         <h3 className="font-display text-lg font-semibold text-card-foreground truncate">
           {product.name}
         </h3>
-        <p className="text-xl font-bold text-primary">₹{product.price}</p>
+
+        {isDealer ? (
+          <p className="text-xl font-bold text-primary">₹{product.price}</p>
+        ) : (
+          <div className="flex items-center gap-2">
+            <Lock className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm text-muted-foreground font-medium">
+              Login for wholesale price
+            </span>
+          </div>
+        )}
+
+        {moq > 1 && (
+          <p className="text-xs text-muted-foreground">
+            Min. order: <span className="font-semibold text-foreground">{moq} pcs</span>
+          </p>
+        )}
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setQty(Math.max(1, qty - 1))}
+            onClick={() => handleQtyChange(qty - 1)}
             className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-secondary transition-colors"
           >
             <Minus className="h-3 w-3" />
           </button>
           <span className="w-8 text-center text-sm font-medium">{qty}</span>
           <button
-            onClick={() => setQty(qty + 1)}
+            onClick={() => handleQtyChange(qty + 1)}
             className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-secondary transition-colors"
           >
             <Plus className="h-3 w-3" />

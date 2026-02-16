@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useCart } from "@/context/CartContext";
+import { useDealerAuth } from "@/context/DealerAuthContext";
 import { useNavigate } from "react-router-dom";
 import { OrderDetails } from "@/types/store";
 import { motion } from "framer-motion";
@@ -15,8 +16,38 @@ const orderSchema = z.object({
   pincode: z.string().trim().min(6, "Valid pincode required").max(6),
 });
 
+// Google Apps Script Web App URL — replace with your deployed script URL
+const ORDER_SHEET_URL = "";
+
+async function saveOrderToSheet(orderId: string, form: OrderDetails, items: string, total: number) {
+  if (!ORDER_SHEET_URL) {
+    console.warn("Order sheet URL not configured — skipping save.");
+    return;
+  }
+  try {
+    await fetch(ORDER_SHEET_URL, {
+      method: "POST",
+      mode: "no-cors",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId,
+        name: form.name,
+        phone: form.phone,
+        address: form.address,
+        pincode: form.pincode,
+        items,
+        total,
+        date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+      }),
+    });
+  } catch (err) {
+    console.error("Failed to save order to sheet:", err);
+  }
+}
+
 export default function Checkout() {
   const { cart, totalPrice, clearCart } = useCart();
+  const { isDealer } = useDealerAuth();
   const navigate = useNavigate();
   const [form, setForm] = useState<OrderDetails>({
     name: "",
@@ -27,7 +58,17 @@ export default function Checkout() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
+  // Check MOQ violations
+  const moqViolations = cart.filter(
+    (item) => item.minimumOrder && item.qty < item.minimumOrder
+  );
+
   if (cart.length === 0) {
+    navigate("/cart");
+    return null;
+  }
+
+  if (moqViolations.length > 0) {
     navigate("/cart");
     return null;
   }
@@ -37,7 +78,7 @@ export default function Checkout() {
     setErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
-  const handleOrder = () => {
+  const handleOrder = async () => {
     const result = orderSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -52,14 +93,20 @@ export default function Checkout() {
 
     const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
 
-    // Build WhatsApp message
     const itemLines = cart
       .map((item) => `• ${item.name} x${item.qty} = ₹${item.price * item.qty}`)
       .join("\n");
 
+    const itemsForSheet = cart
+      .map((item) => `${item.name} x${item.qty}`)
+      .join(", ");
+
+    // Save order to Google Sheet
+    await saveOrderToSheet(orderId, form, itemsForSheet, totalPrice);
+
+    // Build WhatsApp message
     const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n*Pincode:* ${form.pincode}\n\n*Items:*\n${itemLines}\n\n*Total: ₹${totalPrice}*`;
 
-    // Open WhatsApp
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
       "_blank"
@@ -90,12 +137,18 @@ export default function Checkout() {
                 <span className="text-muted-foreground">
                   {item.name} × {item.qty}
                 </span>
-                <span className="font-medium">₹{item.price * item.qty}</span>
+                {isDealer && (
+                  <span className="font-medium">₹{item.price * item.qty}</span>
+                )}
               </div>
             ))}
             <div className="border-t mt-3 pt-3 flex justify-between font-bold">
               <span>Total</span>
-              <span className="text-primary text-lg">₹{totalPrice}</span>
+              {isDealer ? (
+                <span className="text-primary text-lg">₹{totalPrice}</span>
+              ) : (
+                <span className="text-sm text-muted-foreground">Login for pricing</span>
+              )}
             </div>
           </div>
 
@@ -143,7 +196,7 @@ export default function Checkout() {
               disabled={submitting}
               className="w-full bg-primary text-primary-foreground py-3.5 rounded-lg font-semibold text-base shadow-button hover:opacity-90 transition-opacity disabled:opacity-50 mt-2"
             >
-              {submitting ? "Processing..." : `Place Order & Pay ₹${totalPrice}`}
+              {submitting ? "Processing..." : `Place Order${isDealer ? ` & Pay ₹${totalPrice}` : ""}`}
             </button>
             <p className="text-xs text-muted-foreground text-center">
               Order will be sent via WhatsApp for confirmation.
