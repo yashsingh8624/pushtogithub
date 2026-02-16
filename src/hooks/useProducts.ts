@@ -29,6 +29,7 @@ export function useProducts() {
           image_url: (r.c[3]?.v || CLOUDINARY_FALLBACK).toString().trim(),
           season: (r.c[4]?.v || "all").toLowerCase().trim(),
           stock: r.c[5]?.v != null ? Number(r.c[5]?.v) : undefined,
+          minimumOrder: r.c[6]?.v != null ? Number(r.c[6]?.v) : 1,
         }));
 
         setProducts(parsed);
