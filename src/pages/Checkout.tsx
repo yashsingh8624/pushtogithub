@@ -9,6 +9,9 @@ import { z } from "zod";
 
 const WHATSAPP_NUMBER = "918624091826";
 
+// Replace with your Razorpay Key ID (test mode key starts with rzp_test_)
+const RAZORPAY_KEY_ID = "";
+
 const orderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   phone: z.string().trim().min(10, "Valid phone number required").max(15),
@@ -45,6 +48,12 @@ async function saveOrderToSheet(orderId: string, form: OrderDetails, items: stri
   }
 }
 
+declare global {
+  interface Window {
+    Razorpay: any;
+  }
+}
+
 export default function Checkout() {
   const { cart, totalPrice, clearCart } = useCart();
   const { isDealer } = useDealerAuth();
@@ -58,7 +67,6 @@ export default function Checkout() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  // Check MOQ violations
   const moqViolations = cart.filter(
     (item) => item.minimumOrder && item.qty < item.minimumOrder
   );
@@ -78,7 +86,90 @@ export default function Checkout() {
     setErrors((prev) => ({ ...prev, [field]: "" }));
   };
 
-  const handleOrder = async () => {
+  const generateOrderId = () => `ORD-${Date.now().toString(36).toUpperCase()}`;
+
+  const getItemLines = () =>
+    cart.map((item) => `• ${item.name} x${item.qty} = ₹${item.price * item.qty}`).join("\n");
+
+  const getItemsForSheet = () =>
+    cart.map((item) => `${item.name} x${item.qty}`).join(", ");
+
+  const completeOrder = async (orderId: string, paymentMethod: string) => {
+    await saveOrderToSheet(orderId, form, getItemsForSheet(), totalPrice);
+
+    const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Payment:* ${paymentMethod}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n*Pincode:* ${form.pincode}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
+
+    window.open(
+      `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+
+    clearCart();
+    toast.success("Order placed successfully!");
+    navigate("/order-success", { state: { orderId, total: totalPrice } });
+  };
+
+  const handleRazorpayPayment = () => {
+    const result = orderSchema.safeParse(form);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((e) => {
+        if (e.path[0]) fieldErrors[e.path[0] as string] = e.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
+
+    if (!RAZORPAY_KEY_ID) {
+      toast.error("Razorpay is not configured yet. Please use WhatsApp order.");
+      return;
+    }
+
+    if (!window.Razorpay) {
+      toast.error("Payment gateway failed to load. Please try again.");
+      return;
+    }
+
+    setSubmitting(true);
+    const orderId = generateOrderId();
+
+    const options = {
+      key: RAZORPAY_KEY_ID,
+      amount: totalPrice * 100, // Razorpay expects paise
+      currency: "INR",
+      name: "Akash Traders & Sai Collection",
+      description: `Order ${orderId}`,
+      order_id: undefined, // For server-generated order IDs (optional)
+      prefill: {
+        name: form.name,
+        contact: form.phone,
+      },
+      theme: {
+        color: "#E8652C",
+      },
+      handler: async function (response: any) {
+        console.log("Payment successful:", response);
+        await completeOrder(orderId, `Razorpay (${response.razorpay_payment_id})`);
+        setSubmitting(false);
+      },
+      modal: {
+        ondismiss: function () {
+          setSubmitting(false);
+          toast.error("Payment cancelled. Your cart is intact.");
+        },
+      },
+    };
+
+    const rzp = new window.Razorpay(options);
+    rzp.on("payment.failed", function (response: any) {
+      console.error("Payment failed:", response.error);
+      setSubmitting(false);
+      toast.error("Payment failed. Please try again.");
+    });
+    rzp.open();
+  };
+
+  const handleWhatsAppOrder = async () => {
     const result = orderSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -90,31 +181,9 @@ export default function Checkout() {
     }
 
     setSubmitting(true);
-
-    const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
-
-    const itemLines = cart
-      .map((item) => `• ${item.name} x${item.qty} = ₹${item.price * item.qty}`)
-      .join("\n");
-
-    const itemsForSheet = cart
-      .map((item) => `${item.name} x${item.qty}`)
-      .join(", ");
-
-    // Save order to Google Sheet
-    await saveOrderToSheet(orderId, form, itemsForSheet, totalPrice);
-
-    // Build WhatsApp message
-    const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n*Pincode:* ${form.pincode}\n\n*Items:*\n${itemLines}\n\n*Total: ₹${totalPrice}*`;
-
-    window.open(
-      `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
-      "_blank"
-    );
-
-    clearCart();
-    toast.success("Order placed successfully!");
-    navigate("/order-success", { state: { orderId, total: totalPrice } });
+    const orderId = generateOrderId();
+    await completeOrder(orderId, "WhatsApp (COD)");
+    setSubmitting(false);
   };
 
   const inputClass =
@@ -191,15 +260,41 @@ export default function Checkout() {
               </div>
             ))}
 
-            <button
-              onClick={handleOrder}
-              disabled={submitting}
-              className="w-full bg-primary text-primary-foreground py-3.5 rounded-lg font-semibold text-base shadow-button hover:opacity-90 transition-opacity disabled:opacity-50 mt-2"
-            >
-              {submitting ? "Processing..." : `Place Order${isDealer ? ` & Pay ₹${totalPrice}` : ""}`}
-            </button>
+            {/* Payment Buttons */}
+            <div className="space-y-3 mt-2">
+              {/* Razorpay Pay Now */}
+              <button
+                onClick={handleRazorpayPayment}
+                disabled={submitting || !RAZORPAY_KEY_ID}
+                className="w-full bg-primary text-primary-foreground py-3.5 rounded-lg font-semibold text-base shadow-button hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {submitting ? "Processing..." : `💳 Pay Now${isDealer ? ` ₹${totalPrice}` : ""}`}
+              </button>
+
+              {!RAZORPAY_KEY_ID && (
+                <p className="text-xs text-muted-foreground text-center">
+                  Online payment coming soon. Use WhatsApp order below.
+                </p>
+              )}
+
+              <div className="flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">OR</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+
+              {/* WhatsApp Order (backup) */}
+              <button
+                onClick={handleWhatsAppOrder}
+                disabled={submitting}
+                className="w-full bg-[#25D366] text-white py-3.5 rounded-lg font-semibold text-base hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                📱 Order via WhatsApp (COD)
+              </button>
+            </div>
+
             <p className="text-xs text-muted-foreground text-center">
-              Order will be sent via WhatsApp for confirmation.
+              Secure payments via Razorpay • UPI, Cards & Net Banking accepted
             </p>
           </div>
         </motion.div>
