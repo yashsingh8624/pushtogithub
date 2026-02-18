@@ -15,34 +15,35 @@ const RAZORPAY_KEY_ID = "";
 const orderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   phone: z.string().trim().min(10, "Valid phone number required").max(15),
-  address: z.string().trim().min(5, "Address is required").max(500),
-  pincode: z.string().trim().min(6, "Valid pincode required").max(6),
 });
 
 // Google Apps Script Web App URL — replace with your deployed script URL
 const ORDER_SHEET_URL = "";
 
-async function saveOrderToSheet(orderId: string, form: OrderDetails, items: string, total: number) {
+async function saveOrderToSheet(orderId: string, form: OrderDetails, items: { name: string; qty: number; price: number }[], total: number) {
   if (!ORDER_SHEET_URL) {
     console.warn("Order sheet URL not configured — skipping save.");
     return;
   }
   try {
-    await fetch(ORDER_SHEET_URL, {
-      method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId,
-        name: form.name,
-        phone: form.phone,
-        address: form.address,
-        pincode: form.pincode,
-        items,
-        total,
-        date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
-      }),
-    });
+    // Save one row per item for clarity in sheet
+    for (const item of items) {
+      await fetch(ORDER_SHEET_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          orderId,
+          customerName: form.name,
+          phone: form.phone,
+          productName: item.name,
+          quantity: item.qty,
+          price: item.price * item.qty,
+          total,
+          date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+        }),
+      });
+    }
   } catch (err) {
     console.error("Failed to save order to sheet:", err);
   }
@@ -58,12 +59,7 @@ export default function Checkout() {
   const { cart, totalPrice, clearCart } = useCart();
   const { isDealer } = useDealerAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState<OrderDetails>({
-    name: "",
-    phone: "",
-    address: "",
-    pincode: "",
-  });
+  const [form, setForm] = useState<OrderDetails>({ name: "", phone: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
@@ -71,12 +67,7 @@ export default function Checkout() {
     (item) => item.minimumOrder && item.qty < item.minimumOrder
   );
 
-  if (cart.length === 0) {
-    navigate("/cart");
-    return null;
-  }
-
-  if (moqViolations.length > 0) {
+  if (cart.length === 0 || moqViolations.length > 0) {
     navigate("/cart");
     return null;
   }
@@ -91,13 +82,12 @@ export default function Checkout() {
   const getItemLines = () =>
     cart.map((item) => `• ${item.name} x${item.qty} = ₹${item.price * item.qty}`).join("\n");
 
-  const getItemsForSheet = () =>
-    cart.map((item) => `${item.name} x${item.qty}`).join(", ");
+  const cartItems = cart.map((item) => ({ name: item.name, qty: item.qty, price: item.price }));
 
   const completeOrder = async (orderId: string, paymentMethod: string) => {
-    await saveOrderToSheet(orderId, form, getItemsForSheet(), totalPrice);
+    await saveOrderToSheet(orderId, form, cartItems, totalPrice);
 
-    const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Payment:* ${paymentMethod}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n*Pincode:* ${form.pincode}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
+    const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Payment:* ${paymentMethod}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
 
     window.open(
       `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
@@ -109,7 +99,7 @@ export default function Checkout() {
     navigate("/order-success", { state: { orderId, total: totalPrice } });
   };
 
-  const handleRazorpayPayment = () => {
+  const validateForm = () => {
     const result = orderSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -117,8 +107,13 @@ export default function Checkout() {
         if (e.path[0]) fieldErrors[e.path[0] as string] = e.message;
       });
       setErrors(fieldErrors);
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const handleRazorpayPayment = () => {
+    if (!validateForm()) return;
 
     if (!RAZORPAY_KEY_ID) {
       toast.error("Razorpay is not configured yet. Please use WhatsApp order.");
@@ -135,20 +130,13 @@ export default function Checkout() {
 
     const options = {
       key: RAZORPAY_KEY_ID,
-      amount: totalPrice * 100, // Razorpay expects paise
+      amount: totalPrice * 100,
       currency: "INR",
       name: "Akash Traders & Sai Collection",
       description: `Order ${orderId}`,
-      order_id: undefined, // For server-generated order IDs (optional)
-      prefill: {
-        name: form.name,
-        contact: form.phone,
-      },
-      theme: {
-        color: "#E8652C",
-      },
+      prefill: { name: form.name, contact: form.phone },
+      theme: { color: "#E8652C" },
       handler: async function (response: any) {
-        console.log("Payment successful:", response);
         await completeOrder(orderId, `Razorpay (${response.razorpay_payment_id})`);
         setSubmitting(false);
       },
@@ -161,8 +149,7 @@ export default function Checkout() {
     };
 
     const rzp = new window.Razorpay(options);
-    rzp.on("payment.failed", function (response: any) {
-      console.error("Payment failed:", response.error);
+    rzp.on("payment.failed", function () {
       setSubmitting(false);
       toast.error("Payment failed. Please try again.");
     });
@@ -170,16 +157,7 @@ export default function Checkout() {
   };
 
   const handleWhatsAppOrder = async () => {
-    const result = orderSchema.safeParse(form);
-    if (!result.success) {
-      const fieldErrors: Record<string, string> = {};
-      result.error.errors.forEach((e) => {
-        if (e.path[0]) fieldErrors[e.path[0] as string] = e.message;
-      });
-      setErrors(fieldErrors);
-      return;
-    }
-
+    if (!validateForm()) return;
     setSubmitting(true);
     const orderId = generateOrderId();
     await completeOrder(orderId, "WhatsApp (COD)");
@@ -192,10 +170,7 @@ export default function Checkout() {
   return (
     <div className="min-h-screen pt-20 pb-12">
       <div className="container mx-auto px-4 max-w-lg">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-        >
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
           <h1 className="font-display text-3xl font-bold mb-8">Checkout</h1>
 
           {/* Order Summary */}
@@ -206,9 +181,7 @@ export default function Checkout() {
                 <span className="text-muted-foreground">
                   {item.name} × {item.qty}
                 </span>
-                {isDealer && (
-                  <span className="font-medium">₹{item.price * item.qty}</span>
-                )}
+                {isDealer && <span className="font-medium">₹{item.price * item.qty}</span>}
               </div>
             ))}
             <div className="border-t mt-3 pt-3 flex justify-between font-bold">
@@ -221,48 +194,38 @@ export default function Checkout() {
             </div>
           </div>
 
-          {/* Form */}
+          {/* Order Form */}
           <div className="bg-card rounded-lg p-5 shadow-card space-y-4">
-            <h2 className="font-display text-lg font-semibold">Delivery Details</h2>
+            <h2 className="font-display text-lg font-semibold">Customer Details</h2>
 
-            {(["name", "phone", "address", "pincode"] as const).map((field) => (
-              <div key={field}>
-                <label className="text-sm font-medium capitalize text-muted-foreground mb-1 block">
-                  {field === "pincode" ? "PIN Code" : field}
-                </label>
-                {field === "address" ? (
-                  <textarea
-                    value={form[field]}
-                    onChange={(e) => handleChange(field, e.target.value)}
-                    className={`${inputClass} min-h-[80px] resize-none`}
-                    placeholder="Full delivery address"
-                    maxLength={500}
-                  />
-                ) : (
-                  <input
-                    type={field === "phone" ? "tel" : "text"}
-                    value={form[field]}
-                    onChange={(e) => handleChange(field, e.target.value)}
-                    className={inputClass}
-                    placeholder={
-                      field === "name"
-                        ? "Your full name"
-                        : field === "phone"
-                        ? "10-digit phone number"
-                        : "6-digit PIN code"
-                    }
-                    maxLength={field === "pincode" ? 6 : field === "phone" ? 15 : 100}
-                  />
-                )}
-                {errors[field] && (
-                  <p className="text-destructive text-xs mt-1">{errors[field]}</p>
-                )}
-              </div>
-            ))}
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Customer Name</label>
+              <input
+                type="text"
+                value={form.name}
+                onChange={(e) => handleChange("name", e.target.value)}
+                className={inputClass}
+                placeholder="Your full name"
+                maxLength={100}
+              />
+              {errors.name && <p className="text-destructive text-xs mt-1">{errors.name}</p>}
+            </div>
+
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Phone Number</label>
+              <input
+                type="tel"
+                value={form.phone}
+                onChange={(e) => handleChange("phone", e.target.value)}
+                className={inputClass}
+                placeholder="10-digit phone number"
+                maxLength={15}
+              />
+              {errors.phone && <p className="text-destructive text-xs mt-1">{errors.phone}</p>}
+            </div>
 
             {/* Payment Buttons */}
             <div className="space-y-3 mt-2">
-              {/* Razorpay Pay Now */}
               <button
                 onClick={handleRazorpayPayment}
                 disabled={submitting || !RAZORPAY_KEY_ID}
@@ -283,7 +246,6 @@ export default function Checkout() {
                 <div className="h-px flex-1 bg-border" />
               </div>
 
-              {/* WhatsApp Order (backup) */}
               <button
                 onClick={handleWhatsAppOrder}
                 disabled={submitting}
