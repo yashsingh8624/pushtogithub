@@ -20,27 +20,24 @@ const orderSchema = z.object({
 // Google Apps Script Web App URL — replace with your deployed script URL
 const ORDER_SHEET_URL = "";
 
-async function saveOrderToSheet(orderId: string, form: OrderDetails, items: { name: string; qty: number; price: number }[], total: number) {
+async function saveOrderToSheet(form: OrderDetails, items: { name: string; qty: number; price: number }[]) {
   if (!ORDER_SHEET_URL) {
     console.warn("Order sheet URL not configured — skipping save.");
     return;
   }
   try {
-    // Save one row per item for clarity in sheet
     for (const item of items) {
       await fetch(ORDER_SHEET_URL, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          orderId,
-          customerName: form.name,
-          phone: form.phone,
-          productName: item.name,
-          quantity: item.qty,
-          price: item.price * item.qty,
-          total,
-          date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
+          CustomerName: form.name,
+          PhoneNumber: form.phone,
+          ProductName: item.name,
+          Quantity: item.qty,
+          Price: item.price * item.qty,
+          Date: new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" }),
         }),
       });
     }
@@ -85,7 +82,7 @@ export default function Checkout() {
   const cartItems = cart.map((item) => ({ name: item.name, qty: item.qty, price: item.price }));
 
   const completeOrder = async (orderId: string, paymentMethod: string) => {
-    await saveOrderToSheet(orderId, form, cartItems, totalPrice);
+    await saveOrderToSheet(form, cartItems);
 
     const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Payment:* ${paymentMethod}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
 
