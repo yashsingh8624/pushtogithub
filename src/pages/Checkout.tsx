@@ -1,11 +1,11 @@
 import { useState } from "react";
 import { useCart } from "@/context/CartContext";
-import { useDealerAuth } from "@/context/DealerAuthContext";
 import { useNavigate } from "react-router-dom";
 import { OrderDetails } from "@/types/store";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import { z } from "zod";
+import { Loader2 } from "lucide-react";
 
 const WHATSAPP_NUMBER = "918624091826";
 
@@ -15,22 +15,37 @@ const ORDER_SHEET_URL =
 const orderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
   phone: z.string().trim().min(10, "Valid phone number required").max(15),
+  address: z.string().trim().min(1, "Address is required").max(300),
 });
 
-async function saveOrderToSheet(form: OrderDetails, items: { name: string; qty: number; price: number }[]) {
+function generateOrderId() {
+  const year = new Date().getFullYear();
+  const seq = Math.floor(Math.random() * 900 + 100); // 100-999
+  return `ORD-${year}-${String(seq).padStart(3, "0")}`;
+}
+
+async function saveOrderToSheet(
+  orderId: string,
+  form: OrderDetails,
+  items: { name: string; qty: number; price: number }[]
+) {
+  const date = new Date().toLocaleDateString("en-IN");
   for (const item of items) {
     await fetch(ORDER_SHEET_URL, {
       method: "POST",
       mode: "no-cors",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        orderId: "ORD" + Date.now(),
-        name: form.name,
-        phone: form.phone,
-        product: item.name,
-        quantity: item.qty,
-        price: item.price,
-        total: item.price * item.qty,
+        OrderID: orderId,
+        Date: date,
+        CustomerName: form.name,
+        Phone: form.phone,
+        Address: form.address,
+        ProductName: item.name,
+        Price: item.price,
+        Quantity: item.qty,
+        TotalAmount: item.price * item.qty,
+        Status: "Pending",
       }),
     });
   }
@@ -38,17 +53,12 @@ async function saveOrderToSheet(form: OrderDetails, items: { name: string; qty: 
 
 export default function Checkout() {
   const { cart, totalPrice, clearCart } = useCart();
-  const { isDealer } = useDealerAuth();
   const navigate = useNavigate();
-  const [form, setForm] = useState<OrderDetails>({ name: "", phone: "" });
+  const [form, setForm] = useState<OrderDetails>({ name: "", phone: "", address: "" });
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
 
-  const moqViolations = cart.filter(
-    (item) => item.minimumOrder && item.qty < item.minimumOrder
-  );
-
-  if (cart.length === 0 || moqViolations.length > 0) {
+  if (cart.length === 0) {
     navigate("/cart");
     return null;
   }
@@ -81,10 +91,10 @@ export default function Checkout() {
     setSubmitting(true);
 
     try {
-      await saveOrderToSheet(form, cartItems);
+      const orderId = generateOrderId();
+      await saveOrderToSheet(orderId, form, cartItems);
 
-      const orderId = `ORD-${Date.now().toString(36).toUpperCase()}`;
-      const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
+      const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
 
       window.open(
         `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
@@ -119,16 +129,12 @@ export default function Checkout() {
                 <span className="text-muted-foreground">
                   {item.name} × {item.qty}
                 </span>
-                {isDealer && <span className="font-medium">₹{item.price * item.qty}</span>}
+                <span className="font-medium">₹{item.price * item.qty}</span>
               </div>
             ))}
             <div className="border-t mt-3 pt-3 flex justify-between font-bold">
               <span>Total</span>
-              {isDealer ? (
-                <span className="text-primary text-lg">₹{totalPrice}</span>
-              ) : (
-                <span className="text-sm text-muted-foreground">Login for pricing</span>
-              )}
+              <span className="text-primary text-lg">₹{totalPrice}</span>
             </div>
           </div>
 
@@ -162,6 +168,18 @@ export default function Checkout() {
               {errors.phone && <p className="text-destructive text-xs mt-1">{errors.phone}</p>}
             </div>
 
+            <div>
+              <label className="text-sm font-medium text-muted-foreground mb-1 block">Delivery Address</label>
+              <textarea
+                value={form.address}
+                onChange={(e) => handleChange("address", e.target.value)}
+                className={`${inputClass} min-h-[80px] resize-none`}
+                placeholder="Full delivery address"
+                maxLength={300}
+              />
+              {errors.address && <p className="text-destructive text-xs mt-1">{errors.address}</p>}
+            </div>
+
             {/* Place Order Button */}
             <div className="space-y-3 mt-2">
               <button
@@ -169,7 +187,13 @@ export default function Checkout() {
                 disabled={submitting}
                 className="w-full bg-primary text-primary-foreground py-3.5 rounded-lg font-semibold text-base shadow-button hover:opacity-90 transition-opacity disabled:opacity-50 flex items-center justify-center gap-2"
               >
-                {submitting ? "Placing Order..." : "📦 Place Order"}
+                {submitting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" /> Placing Order...
+                  </>
+                ) : (
+                  "📦 Place Order"
+                )}
               </button>
 
               <p className="text-xs text-muted-foreground text-center">

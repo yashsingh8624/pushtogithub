@@ -15,4 +15,5 @@ export interface CartItem extends Product {
 export interface OrderDetails {
   name: string;
   phone: string;
+  address: string;
 }
