@@ -7,8 +7,6 @@ import { toast } from "sonner";
 import { z } from "zod";
 import { Loader2 } from "lucide-react";
 
-const WHATSAPP_NUMBER = "918624091826";
-
 const ORDER_SHEET_URL =
   "https://script.google.com/macros/s/AKfycbzxV9RXuVtsx0ZJyOcCeMp8atn2LVIo5UNaYsjOsWFkvkXJxJewYVeazPBnK32pr_M/exec";
 
@@ -20,7 +18,7 @@ const orderSchema = z.object({
 
 function generateOrderId() {
   const year = new Date().getFullYear();
-  const seq = Math.floor(Math.random() * 900 + 100); // 100-999
+  const seq = Math.floor(Math.random() * 900 + 100);
   return `ORD-${year}-${String(seq).padStart(3, "0")}`;
 }
 
@@ -31,10 +29,9 @@ async function saveOrderToSheet(
 ) {
   const date = new Date().toLocaleDateString("en-IN");
   for (const item of items) {
-    await fetch(ORDER_SHEET_URL, {
+    const response = await fetch(ORDER_SHEET_URL, {
       method: "POST",
-      mode: "no-cors",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({
         OrderID: orderId,
         Date: date,
@@ -48,6 +45,11 @@ async function saveOrderToSheet(
         Status: "Pending",
       }),
     });
+
+    const result = await response.json();
+    if (!result.success) {
+      throw new Error(result.error || "Failed to save order");
+    }
   }
 }
 
@@ -81,9 +83,6 @@ export default function Checkout() {
     return true;
   };
 
-  const getItemLines = () =>
-    cart.map((item) => `• ${item.name} x${item.qty} = ₹${item.price * item.qty}`).join("\n");
-
   const cartItems = cart.map((item) => ({ name: item.name, qty: item.qty, price: item.price }));
 
   const handlePlaceOrder = async () => {
@@ -93,13 +92,6 @@ export default function Checkout() {
     try {
       const orderId = generateOrderId();
       await saveOrderToSheet(orderId, form, cartItems);
-
-      const message = `🛒 *New Order*\n\n*Order ID:* ${orderId}\n*Name:* ${form.name}\n*Phone:* ${form.phone}\n*Address:* ${form.address}\n\n*Items:*\n${getItemLines()}\n\n*Total: ₹${totalPrice}*`;
-
-      window.open(
-        `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`,
-        "_blank"
-      );
 
       clearCart();
       toast.success("Order Placed Successfully. We will contact you soon.");
@@ -197,7 +189,7 @@ export default function Checkout() {
               </button>
 
               <p className="text-xs text-muted-foreground text-center">
-                Your order will be sent via WhatsApp and saved automatically.
+                Your order will be saved automatically.
               </p>
             </div>
           </div>

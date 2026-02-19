@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "@/context/CartContext";
 import Header from "@/components/Header";
-import WhatsAppFloat from "@/components/WhatsAppFloat";
+
 import Index from "./pages/Index";
 import Catalogue from "./pages/Catalogue";
 import Cart from "./pages/Cart";
@@ -31,7 +31,7 @@ const App = () => (
             <Route path="/order-success" element={<OrderSuccess />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
-          <WhatsAppFloat />
+          
         </BrowserRouter>
       </CartProvider>
     </TooltipProvider>

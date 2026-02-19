@@ -23,7 +23,7 @@ export default function OrderSuccess() {
 
         <h1 className="font-display text-3xl font-bold mb-2">Order Placed!</h1>
         <p className="text-muted-foreground mb-6">
-          Your order has been sent via WhatsApp. We'll confirm it shortly!
+          Your order has been saved successfully. We'll contact you shortly!
         </p>
 
         {orderId && (
