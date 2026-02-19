@@ -1,5 +1,4 @@
 import { useCart } from "@/context/CartContext";
-import { useDealerAuth } from "@/context/DealerAuthContext";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowRight, AlertTriangle } from "lucide-react";
@@ -7,9 +6,8 @@ import { toast } from "sonner";
 
 export default function Cart() {
   const { cart, removeFromCart, updateQty, totalPrice, totalItems } = useCart();
-  const { isDealer } = useDealerAuth();
 
-  const handleUpdateQty = (id: string, newQty: number, stock?: number, moq?: number) => {
+  const handleUpdateQty = (id: string, newQty: number, stock?: number) => {
     if (stock !== undefined && newQty > stock) {
       toast.error(`Only ${stock} available in stock.`);
       return;
@@ -17,7 +15,6 @@ export default function Cart() {
     updateQty(id, newQty);
   };
 
-  // Check MOQ violations
   const moqViolations = cart.filter(
     (item) => item.minimumOrder && item.qty < item.minimumOrder
   );
@@ -79,9 +76,7 @@ export default function Cart() {
                   <h3 className="font-display font-semibold text-card-foreground truncate">
                     {item.name}
                   </h3>
-                  {isDealer && (
-                    <p className="text-primary font-bold mt-1">₹{item.price}</p>
-                  )}
+                  <p className="text-primary font-bold mt-1">₹{item.price}</p>
                   {belowMoq && (
                     <p className="text-destructive text-xs mt-1">
                       Min. order: {item.minimumOrder} pcs
@@ -89,14 +84,14 @@ export default function Cart() {
                   )}
                   <div className="flex items-center gap-2 mt-2">
                     <button
-                      onClick={() => handleUpdateQty(item.id, item.qty - 1, item.stock, item.minimumOrder)}
+                      onClick={() => handleUpdateQty(item.id, item.qty - 1, item.stock)}
                       className="h-7 w-7 rounded border flex items-center justify-center hover:bg-secondary transition-colors"
                     >
                       <Minus className="h-3 w-3" />
                     </button>
                     <span className="w-6 text-center text-sm font-medium">{item.qty}</span>
                     <button
-                      onClick={() => handleUpdateQty(item.id, item.qty + 1, item.stock, item.minimumOrder)}
+                      onClick={() => handleUpdateQty(item.id, item.qty + 1, item.stock)}
                       className="h-7 w-7 rounded border flex items-center justify-center hover:bg-secondary transition-colors"
                     >
                       <Plus className="h-3 w-3" />
@@ -110,9 +105,7 @@ export default function Cart() {
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
-                  {isDealer && (
-                    <p className="font-bold text-sm">₹{item.price * item.qty}</p>
-                  )}
+                  <p className="font-bold text-sm">₹{item.price * item.qty}</p>
                 </div>
               </motion.div>
             );
@@ -123,11 +116,7 @@ export default function Cart() {
         <div className="mt-8 bg-card rounded-lg p-6 shadow-card">
           <div className="flex justify-between items-center mb-4">
             <span className="text-lg font-display font-semibold">Total</span>
-            {isDealer ? (
-              <span className="text-2xl font-bold text-primary">₹{totalPrice}</span>
-            ) : (
-              <span className="text-sm text-muted-foreground">Login for pricing</span>
-            )}
+            <span className="text-2xl font-bold text-primary">₹{totalPrice}</span>
           </div>
           <Link
             to="/checkout"

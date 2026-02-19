@@ -1,9 +1,8 @@
 import { Product } from "@/types/store";
 import { useCart } from "@/context/CartContext";
-import { useDealerAuth } from "@/context/DealerAuthContext";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { ShoppingCart, Plus, Minus, Eye, Lock } from "lucide-react";
+import { ShoppingCart, Plus, Minus, Eye } from "lucide-react";
 import { toast } from "sonner";
 
 interface Props {
@@ -14,7 +13,6 @@ interface Props {
 
 export default function ProductCard({ product, index, onZoom }: Props) {
   const { addToCart } = useCart();
-  const { isDealer } = useDealerAuth();
   const moq = product.minimumOrder || 1;
   const [qty, setQty] = useState(moq);
   const outOfStock = product.stock !== undefined && product.stock <= 0;
@@ -93,16 +91,7 @@ export default function ProductCard({ product, index, onZoom }: Props) {
           {product.name}
         </h3>
 
-        {isDealer ? (
-          <p className="text-xl font-bold text-primary">₹{product.price}</p>
-        ) : (
-          <div className="flex items-center gap-2">
-            <Lock className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground font-medium">
-              Login for wholesale price
-            </span>
-          </div>
-        )}
+        <p className="text-xl font-bold text-primary">₹{product.price}</p>
 
         {moq > 1 && (
           <p className="text-xs text-muted-foreground">
