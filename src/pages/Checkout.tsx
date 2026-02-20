@@ -29,10 +29,7 @@ async function saveOrderToSheet(
 ) {
   const date = new Date().toLocaleDateString("en-IN");
   for (const item of items) {
-    const response = await fetch(ORDER_SHEET_URL, {
-      method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({
+    const payload = JSON.stringify({
         OrderID: orderId,
         Date: date,
         CustomerName: form.name,
@@ -43,10 +40,28 @@ async function saveOrderToSheet(
         Quantity: item.qty,
         TotalAmount: item.price * item.qty,
         Status: "Pending",
-      }),
+      });
+
+    console.log("Sending order payload:", payload);
+
+    const response = await fetch(ORDER_SHEET_URL, {
+      method: "POST",
+      headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: payload,
+      redirect: "follow",
     });
 
-    const result = await response.json();
+    const text = await response.text();
+    console.log("Response status:", response.status, "Body:", text);
+
+    let result;
+    try {
+      result = JSON.parse(text);
+    } catch {
+      console.error("Non-JSON response:", text.substring(0, 300));
+      throw new Error("Server returned invalid response. Check Apps Script deployment.");
+    }
+
     if (!result.success) {
       throw new Error(result.error || "Failed to save order");
     }
