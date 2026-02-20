@@ -8,7 +8,7 @@ import { z } from "zod";
 import { Loader2 } from "lucide-react";
 
 const ORDER_SHEET_URL =
-  "https://script.google.com/macros/s/AKfycbzxV9RXuVtsx0ZJyOcCeMp8atn2LVIo5UNaYsjOsWFkvkXJxJewYVeazPBnK32pr_M/exec";
+  "https://script.google.com/macros/s/AKfycbyYlHXV493INzLYrqfdc64Du0Nx2I8VNWgf7pxZ3Rn-P51_QvsL6FJvh_wPYs0PE2AB9Q/exec";
 
 const orderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
