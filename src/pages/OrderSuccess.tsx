@@ -27,10 +27,10 @@ export default function OrderSuccess() {
         </p>
 
         {orderId && (
-          <div className="bg-primary/10 border-2 border-primary rounded-xl p-6 mb-6">
-            <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide mb-2">Order ID</p>
-            <p className="font-mono font-extrabold text-2xl text-primary">{orderId}</p>
-            {total !== undefined && <p className="text-foreground font-bold text-xl mt-3">Total: ₹{total}</p>}
+          <div className="bg-secondary rounded-lg p-4 mb-6">
+            <p className="text-xs text-muted-foreground">Order ID</p>
+            <p className="font-mono font-bold text-lg">{orderId}</p>
+            {total && <p className="text-primary font-bold mt-1">₹{total}</p>}
           </div>
         )}
 

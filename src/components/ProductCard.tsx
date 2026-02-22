@@ -48,9 +48,9 @@ export default function ProductCard({ product, index, onZoom }: Props) {
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.06, duration: 0.4 }}
-      className="group bg-card rounded-xl overflow-hidden shadow-card hover:shadow-card-hover transition-all duration-300"
+      className="group bg-card rounded-lg overflow-hidden shadow-card hover:shadow-card-hover transition-shadow duration-300"
     >
-      <div className="relative overflow-hidden aspect-[4/5] rounded-t-xl">
+      <div className="relative overflow-hidden aspect-[4/5]">
         <img
           src={product.image_url}
           alt={product.name}
@@ -86,12 +86,12 @@ export default function ProductCard({ product, index, onZoom }: Props) {
         )}
       </div>
 
-      <div className="p-4 space-y-3 text-center">
+      <div className="p-4 space-y-3">
         <h3 className="font-display text-lg font-semibold text-card-foreground truncate">
           {product.name}
         </h3>
 
-        <p className="text-2xl font-extrabold text-primary">₹{product.price}</p>
+        <p className="text-xl font-bold text-primary">₹{product.price}</p>
 
         {moq > 1 && (
           <p className="text-xs text-muted-foreground">
@@ -99,26 +99,26 @@ export default function ProductCard({ product, index, onZoom }: Props) {
           </p>
         )}
 
-        <div className="flex items-center justify-center gap-2">
+        <div className="flex items-center gap-2">
           <button
             onClick={() => handleQtyChange(qty - 1)}
-            className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-secondary hover:border-primary transition-all"
+            className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-secondary transition-colors"
           >
-            <Minus className="h-4 w-4" />
+            <Minus className="h-3 w-3" />
           </button>
-          <span className="w-10 text-center text-base font-semibold">{qty}</span>
+          <span className="w-8 text-center text-sm font-medium">{qty}</span>
           <button
             onClick={() => handleQtyChange(qty + 1)}
-            className="h-9 w-9 rounded-lg border border-border flex items-center justify-center hover:bg-secondary hover:border-primary transition-all"
+            className="h-8 w-8 rounded-md border flex items-center justify-center hover:bg-secondary transition-colors"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3 w-3" />
           </button>
         </div>
 
         <button
           onClick={handleAdd}
           disabled={outOfStock}
-          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-3 rounded-lg font-semibold text-sm hover:opacity-90 transition-all shadow-button disabled:opacity-50 disabled:cursor-not-allowed hover:scale-[1.02]"
+          className="w-full flex items-center justify-center gap-2 bg-primary text-primary-foreground py-2.5 rounded-md font-medium text-sm hover:opacity-90 transition-opacity shadow-button disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <ShoppingCart className="h-4 w-4" />
           Add to Cart

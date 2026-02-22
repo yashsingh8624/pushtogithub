@@ -61,8 +61,8 @@ export default function Index() {
             {[
               {
                 icon: ShoppingBag,
-                title: "Wide Collection",
-                desc: "Extensive range of seasonal clothing for every weather!",
+                title: "Wholesale & Retail",
+                desc: "Bulk orders at unbeatable prices. Perfect for resellers!",
               },
               {
                 icon: Truck,

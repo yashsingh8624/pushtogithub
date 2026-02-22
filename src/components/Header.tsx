@@ -12,6 +12,7 @@ export default function Header() {
   const links = [
     { to: "/", label: "Home" },
     { to: "/catalogue", label: "Catalogue" },
+    { to: "/orders", label: "Orders" },
     { to: "/cart", label: "Cart" },
   ];
 
