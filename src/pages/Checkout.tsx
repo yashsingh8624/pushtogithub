@@ -8,7 +8,7 @@ import { z } from "zod";
 import { Loader2 } from "lucide-react";
 
 const ORDER_SHEET_URL =
-  "https://script.google.com/macros/s/AKfycbyYlHXV493INzLYrqfdc64Du0Nx2I8VNWgf7pxZ3Rn-P51_QvsL6FJvh_wPYs0PE2AB9Q/exec";
+  "https://script.google.com/macros/s/AKfycby8I1YLSlmD7_l6J4Ki-fUBgwa2rRL4gAd3jprLLeS-xuSLHT3d7PuVL0TWuQUQZgIAbw/exec";
 
 const orderSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(100),
@@ -28,43 +28,31 @@ async function saveOrderToSheet(
   items: { name: string; qty: number; price: number }[]
 ) {
   const date = new Date().toLocaleDateString("en-IN");
-  for (const item of items) {
-    const payload = JSON.stringify({
-        OrderID: orderId,
-        Date: date,
-        CustomerName: form.name,
-        Phone: form.phone,
-        Address: form.address,
-        ProductName: item.name,
-        Price: item.price,
-        Quantity: item.qty,
-        TotalAmount: item.price * item.qty,
-        Status: "Pending",
-      });
 
-    console.log("Sending order payload:", payload);
+  for (const item of items) {
+    const orderData = {
+      OrderID: orderId,
+      Date: date,
+      CustomerName: form.name,
+      Phone: form.phone,
+      Address: form.address,
+      ProductName: item.name,
+      Price: item.price,
+      Quantity: item.qty,
+      TotalAmount: item.price * item.qty,
+      Status: "Pending",
+    };
 
     const response = await fetch(ORDER_SHEET_URL, {
       method: "POST",
-      headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: payload,
-      redirect: "follow",
+      mode: "no-cors",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(orderData),
     });
 
-    const text = await response.text();
-    console.log("Response status:", response.status, "Body:", text);
-
-    let result;
-    try {
-      result = JSON.parse(text);
-    } catch {
-      console.error("Non-JSON response:", text.substring(0, 300));
-      throw new Error("Server returned invalid response. Check Apps Script deployment.");
-    }
-
-    if (!result.success) {
-      throw new Error(result.error || "Failed to save order");
-    }
+    await new Promise(resolve => setTimeout(resolve, 500));
   }
 }
 
